@@ -14,9 +14,10 @@ export async function getAssistants(): Promise<Catalogue> {
   if (!url || !key) return { items: [], mode: 'error' };
   try {
     const response = await fetch(`${url}/rest/v1/assistants?select=id,slug,name,description,image_url,category,tool_type&status=eq.published&order=sort_order.asc`, {
-      headers: { apikey: key, Authorization: `Bearer ${key}` }, cache: 'no-store',
+      headers: { apikey: key }, cache: 'no-store',
     });
     if (!response.ok) throw new Error('Catalogue unavailable');
     return { items: await response.json() as Assistant[], mode: 'live' };
   } catch { return { items: [], mode: 'error' }; }
 }
+
