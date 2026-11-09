@@ -3,6 +3,7 @@ create extension if not exists pgcrypto;
 create table public.assistants (
  id uuid primary key default gen_random_uuid(), slug text not null unique check (slug ~ '^[a-z0-9-]+$'),
  name text not null, description text not null, image_url text not null, category text not null,
+ tool_type text check (tool_type is null or tool_type in ('rubik', 'logic')),
  sort_order integer not null default 0, status text not null default 'draft' check (status in ('draft','published','archived')),
  created_at timestamptz not null default now(), updated_at timestamptz not null default now()
 );
@@ -26,3 +27,5 @@ insert into public.assistants (slug,name,description,image_url,category,sort_ord
 ('rubik','Thầy AI Rubik','Dạy xoay Rubik bằng hình ảnh trực quan.','/assistants/rubik.webp','Rubik',4,'published'),
 ('khoa-hoc','Thầy AI Khoa học','Khám phá tự nhiên, vật lý, hóa học và thế giới xung quanh.','/assistants/science.webp','Khoa học',5,'published'),
 ('lap-trinh','Thầy AI Lập trình','Scratch, tư duy logic, Python cơ bản và làm quen AI.','/assistants/coding.webp','Lập trình',6,'published');
+update public.assistants set tool_type = 'rubik' where slug = 'rubik';
+update public.assistants set tool_type = 'logic' where slug = 'lap-trinh';
