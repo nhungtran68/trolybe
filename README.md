@@ -1,10 +1,10 @@
 # Trường Học AI Tại Nhà — nền tảng đang xây dựng
 
-Ứng dụng Next.js, giao diện tiếng Việt ưu tiên điện thoại. Trang chủ lấy danh sách trợ lý đã xuất bản từ bảng Supabase, không chứa danh sách cố định trong mã giao diện. `supabase/schema.sql` tạo bảng dữ liệu công khai và nạp đúng sáu bản ghi ban đầu; cấu hình nhạy cảm nằm ở bảng riêng bị chặn truy cập từ API công khai.
+Ứng dụng Next.js, giao diện tiếng Việt ưu tiên điện thoại. Trang chủ lấy danh sách trợ lý đã xuất bản từ bảng Supabase, không chứa danh sách cố định trong mã giao diện. `supabase/schema.sql` tạo bảng dữ liệu công khai và nạp đúng sáu bản ghi ban đầu; cấu hình nhạy cảm nằm ở bảng riêng bị chặn truy cập từ API công khai. Khi chưa khai báo cả hai biến kết nối, trang hiển thị bản xem trước từ cơ sở dữ liệu SQLite chỉ đọc `data/preview.sqlite`. Đây là dữ liệu mẫu tĩnh, không phải cơ sở dữ liệu thực hay trang quản trị; khi cấu hình Supabase, website dùng Supabase và báo lỗi nếu kết nối thất bại.
 
 ## Chạy thử
 
-1. Cài Node.js và chạy `npm ci`.
+1. Cài Node.js phiên bản 22.13 trở lên và chạy `npm ci`.
 2. Với một dự án Supabase **mới dành riêng cho thử nghiệm**, xem lại `supabase/schema.sql` và chạy nó trong SQL editor. Script chỉ dành cho cơ sở dữ liệu trống và chưa được kiểm thử trên Supabase.
 3. Sao chép `.env.example` thành `.env.local`, nhập URL và publishable key của dự án. Không đặt service role key trong biến `NEXT_PUBLIC_`.
 4. Chạy `npm run dev` và mở địa chỉ do Next.js in ra.
