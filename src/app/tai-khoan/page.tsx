@@ -8,5 +8,7 @@ export default async function Account() {
   if (!client) redirect("/dang-nhap?status=config");
   const { data, error } = await client.auth.getClaims();
   if (error || !data?.claims?.sub) redirect("/dang-nhap");
-  return <main className="classroom"><Link href="/">← Trang chủ</Link><div className="auth-card"><h1>Tài khoản của bạn</h1><p>Bạn đã đăng nhập.</p><Link href="/">Khám phá các phòng học →</Link><form action={signOut}><button className="auth-secondary">Đăng xuất</button></form></div></main>;
+  const {data: {user}} = await client.auth.getUser();
+  return <main className="classroom"><Link href="/">← Trang chủ</Link><div className="auth-card"><h1>Tài khoản của bạn</h1><p>Bạn đã đăng nhập.</p><Link href="/">Khám phá các phòng học →</Link>{user?.app_metadata?.school_role === 'admin' && <p><Link href="/admin">Quản lý trợ lý →</Link></p>}<form action={signOut}><button className="auth-secondary">Đăng xuất</button></form></div></main>;
 }
+
