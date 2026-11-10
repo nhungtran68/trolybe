@@ -35,11 +35,32 @@ export function validateAssistantConfig(raw) {
 export function validateChatInput(raw) {
   const slug = clean(raw?.slug, 100);
   const message = clean(raw?.message, 2000);
+  const imageDataUrl = validateImageDataUrl(raw?.imageDataUrl);
   const conversationId = clean(raw?.conversationId, 36);
   const grade = integer(raw?.grade, 1, 5);
-  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || !message || grade === null) return null;
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || (!message && !imageDataUrl) || grade === null) return null;
+  if (raw?.imageDataUrl && !imageDataUrl) return null;
   if (conversationId && !/^[0-9a-f-]{36}$/i.test(conversationId)) return null;
-  return { slug, message, grade, conversationId: conversationId || null };
+  return imageDataUrl
+    ? { slug, message, imageDataUrl, grade, conversationId: conversationId || null }
+    : { slug, message, grade, conversationId: conversationId || null };
+}
+
+export function validateImageDataUrl(value) {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value !== 'string') return null;
+  const match = value.match(/^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/]+={0,2})$/);
+  if (!match) return null;
+  const base64 = match[2];
+  const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
+  const decodedBytes = Math.floor(base64.length * 3 / 4) - padding;
+  if (decodedBytes < 1 || decodedBytes > 3 * 1024 * 1024) return null;
+  const bytes = Buffer.from(base64, 'base64');
+  const isPng = match[1] === 'image/png' && bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
+  const isJpeg = match[1] === 'image/jpeg' && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  const isWebp = match[1] === 'image/webp' && bytes.subarray(0, 4).toString('ascii') === 'RIFF' && bytes.subarray(8, 12).toString('ascii') === 'WEBP';
+  if (!isPng && !isJpeg && !isWebp) return null;
+  return value;
 }
 
 export function containsSensitivePersonalData(text) {

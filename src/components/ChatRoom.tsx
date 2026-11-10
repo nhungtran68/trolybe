@@ -1,7 +1,8 @@
 'use client';
-import { FormEvent, useMemo, useState } from 'react';
+import { ChangeEvent, FormEvent, useMemo, useRef, useState } from 'react';
 
-type Message = { id: string; role: 'user'|'assistant'; content: string };
+type Message = { id: string; role: 'user'|'assistant'; content: string; imageDataUrl?: string };
+type SelectedImage = { dataUrl: string; name: string };
 type Props = { slug: string; name: string; greeting: string; enabled: boolean };
 
 const suggestions: Record<string, string[]> = {
@@ -21,17 +22,26 @@ export default function ChatRoom({ slug, name, greeting, enabled }: Props) {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
+  const [selectedImage, setSelectedImage] = useState<SelectedImage | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const send = async (message: string) => {
     const clean = message.trim();
-    if (!clean || pending || !enabled) return;
+    const image = selectedImage;
+    if ((!clean && !image) || pending || !enabled) return;
+    const visibleMessage = clean || 'Nhờ thầy/cô xem bài tập trong ảnh.';
     setPending(true); setError(''); setText('');
-    const userMessage: Message = { id: crypto.randomUUID(), role: 'user', content: clean };
+    setSelectedImage(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    const userMessage: Message = {
+      id: crypto.randomUUID(), role: 'user', content: visibleMessage,
+      imageDataUrl: image?.dataUrl,
+    };
     setMessages(current => [...current, userMessage]);
     try {
       const response = await fetch('/api/chat', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug, message: clean, grade, conversationId }),
+        body: JSON.stringify({ slug, message: clean, grade, conversationId, imageDataUrl: image?.dataUrl || null }),
       });
       const body = await response.json() as { reply?: string; conversationId?: string; error?: string };
       if (!response.ok || !body.reply) throw new Error(body.error || 'Chưa nhận được câu trả lời.');
@@ -42,8 +52,35 @@ export default function ChatRoom({ slug, name, greeting, enabled }: Props) {
     } finally { setPending(false); }
   };
 
+  const chooseImage = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const supported = ['image/png', 'image/jpeg', 'image/webp'];
+    if (!supported.includes(file.type)) {
+      setError('Ảnh phải là PNG, JPG hoặc WEBP.');
+      event.target.value = '';
+      return;
+    }
+    if (file.size > 3 * 1024 * 1024) {
+      setError('Ảnh không được lớn hơn 3 MB.');
+      event.target.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') return;
+      setSelectedImage({ dataUrl: reader.result, name: file.name });
+      setError('');
+    };
+    reader.onerror = () => setError('Không thể đọc ảnh này. Con hãy chọn ảnh khác nhé.');
+    reader.readAsDataURL(file);
+  };
+
   const submit = (event: FormEvent) => { event.preventDefault(); void send(text); };
-  const startNew = () => { setConversationId(null); setMessages([initial]); setText(''); setError(''); };
+  const startNew = () => {
+    setConversationId(null); setMessages([initial]); setText(''); setError(''); setSelectedImage(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   return <section className="chat-room" aria-label={`Hội thoại với ${name}`}>
     <div className="chat-toolbar">
@@ -59,19 +96,35 @@ export default function ChatRoom({ slug, name, greeting, enabled }: Props) {
     <div className="messages" aria-live="polite">
       {messages.map(message => <article key={message.id} className={`message ${message.role}`}>
         <strong>{message.role === 'assistant' ? name : 'Con'}</strong>
+        {/* The source is a short-lived local data URL selected by the student. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {message.imageDataUrl && <img className="message-image" src={message.imageDataUrl} alt="Ảnh bài tập con đã gửi"/>}
         <p>{message.content}</p>
       </article>)}
       {pending && <article className="message assistant pending"><strong>{name}</strong><p>Đang suy nghĩ từng bước…</p></article>}
     </div>
     {!enabled && <p className="chat-warning">Quản trị viên cần thêm khóa OpenAI và khóa máy chủ Supabase trước khi bắt đầu hội thoại thật.</p>}
     {error && <p className="chat-error" role="alert">{error}</p>}
+    {selectedImage && <div className="image-preview">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={selectedImage.dataUrl} alt="Xem trước ảnh bài tập"/>
+      <div><strong>{selectedImage.name}</strong><span>Ảnh sẽ được AI xem cùng câu hỏi.</span></div>
+      <button type="button" onClick={() => {
+        setSelectedImage(null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }} disabled={pending}>Xóa ảnh</button>
+    </div>}
     <form className="chat-input" onSubmit={submit}>
+      <input ref={fileInputRef} className="sr-only" type="file" accept="image/png,image/jpeg,image/webp"
+        onChange={chooseImage} disabled={pending || !enabled}/>
+      <button className="image-button" type="button" onClick={() => fileInputRef.current?.click()}
+        disabled={pending || !enabled} aria-label="Tải ảnh bài tập">📷 <span>Tải ảnh</span></button>
       <label htmlFor="student-question" className="sr-only">Câu hỏi của con</label>
       <textarea id="student-question" value={text} maxLength={2000} rows={3}
         onChange={event => setText(event.target.value)}
         onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }}
         placeholder="Con hãy nhập câu hỏi ở đây…" disabled={pending || !enabled}/>
-      <button type="submit" disabled={pending || !enabled || !text.trim()}>Gửi</button>
+      <button type="submit" disabled={pending || !enabled || (!text.trim() && !selectedImage)}>Gửi</button>
     </form>
     <p className="privacy-note">Không gửi họ tên đầy đủ, địa chỉ, số điện thoại, email hoặc mật khẩu.</p>
   </section>;

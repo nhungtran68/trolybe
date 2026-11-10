@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { createTutorResponse, getAssistantAIConfig, moderateText } from '@/lib/ai';
+import { createTutorResponse, getAssistantAIConfig, moderateInput, moderateText } from '@/lib/ai';
 import { containsSensitivePersonalData, estimateMicroUsd, validateChatInput } from '@/lib/ai-validation.mjs';
 
 export const runtime = 'nodejs';
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
   let raw: unknown;
   try { raw = await request.json(); } catch { return json({ error: 'Dữ liệu gửi lên chưa hợp lệ.' }, 400); }
   const input = validateChatInput(raw);
-  if (!input) return json({ error: 'Câu hỏi phải dài từ 1–2.000 ký tự và lớp từ 1–5.' }, 400);
+  if (!input) return json({ error: 'Câu hỏi hoặc ảnh chưa hợp lệ. Ảnh phải là PNG, JPG hoặc WEBP và không quá 3 MB.' }, 400);
   if (containsSensitivePersonalData(input.message)) {
     return json({ error: 'Con đừng gửi mật khẩu, email, số điện thoại hoặc địa chỉ nhé. Hãy xóa thông tin riêng tư rồi hỏi lại.' }, 400);
   }
@@ -55,7 +55,8 @@ export async function POST(request: Request) {
   };
 
   try {
-    if (await moderateText(input.message)) {
+    const prompt = input.message || 'Hãy xem bài tập trong ảnh, nói con cần làm gì và gợi mở bước đầu tiên. Không cho đáp án ngay.';
+    if (await moderateInput(prompt, input.imageDataUrl ?? null)) {
       await finishUsage({ status: 'blocked', error_code: 'input_moderation' });
       return json({ error: 'Câu hỏi này chưa phù hợp với lớp học. Con hãy đổi sang một câu hỏi học tập an toàn nhé.' }, 400);
     }
@@ -75,16 +76,21 @@ export async function POST(request: Request) {
     } else {
       const { data: conversation, error } = await admin.from('conversations').insert({
         user_id: user.id, assistant_id: assistant.id, grade: input.grade,
-        title: input.message.slice(0, 100),
+        title: (input.message || 'Bài tập bằng hình ảnh').slice(0, 100),
       }).select('id').single();
       if (error || !conversation) throw new Error('conversation_create_failed');
       conversationId = conversation.id;
     }
 
     await admin.from('conversation_messages').insert({
-      conversation_id: conversationId, role: 'user', content: input.message, moderation_status: 'passed',
+      conversation_id: conversationId, role: 'user',
+      content: input.imageDataUrl ? `[Đính kèm ảnh bài tập]\n${prompt}` : prompt,
+      moderation_status: 'passed',
     });
-    const result = await createTutorResponse({ config, grade: input.grade, userId: user.id, history, message: input.message });
+    const result = await createTutorResponse({
+      config, grade: input.grade, userId: user.id, history, message: prompt,
+      imageDataUrl: input.imageDataUrl,
+    });
     if (await moderateText(result.text)) {
       const safeReply = 'Câu trả lời vừa rồi chưa phù hợp để hiển thị. Con hãy hỏi lại theo một cách khác hoặc nhờ người lớn hỗ trợ nhé.';
       await admin.from('conversation_messages').insert({ conversation_id: conversationId, role: 'assistant', content: safeReply, moderation_status: 'blocked' });

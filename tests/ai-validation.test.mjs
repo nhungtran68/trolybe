@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { containsSensitivePersonalData, estimateMicroUsd, validateAssistantConfig, validateChatInput } from '../src/lib/ai-validation.mjs';
+import { containsSensitivePersonalData, estimateMicroUsd, validateAssistantConfig, validateChatInput, validateImageDataUrl } from '../src/lib/ai-validation.mjs';
 
 test('chat input accepts a grade-school question and normalizes whitespace', () => {
   assert.deepEqual(validateChatInput({slug:'toan-hoc',message:'  125 × 24 bằng bao nhiêu?  ',grade:3}), {
@@ -28,4 +28,12 @@ test('AI configuration only accepts supported models and bounded limits', () => 
 
 test('cost estimate uses recorded tokens and configured per-million rates', () => {
   assert.equal(estimateMicroUsd(1000,500,50000,250000), 175);
+});
+
+test('chat input accepts one small supported image and rejects unsafe image data', () => {
+  const image = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB';
+  assert.equal(validateImageDataUrl(image), image);
+  assert.equal(validateChatInput({slug:'toan-hoc',message:'',imageDataUrl:image,grade:3})?.imageDataUrl, image);
+  assert.equal(validateImageDataUrl('data:image/svg+xml;base64,PHN2Zz4='), null);
+  assert.equal(validateImageDataUrl('https://example.com/student.png'), null);
 });

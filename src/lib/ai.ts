@@ -36,11 +36,19 @@ export async function getAssistantAIConfig(assistantId: string) {
 }
 
 export async function moderateText(text: string) {
+  return moderateInput(text, null);
+}
+
+export async function moderateInput(text: string, imageDataUrl: string | null) {
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new Error('openai_not_configured');
+  const input = imageDataUrl ? [
+    { type: 'text', text },
+    { type: 'image_url', image_url: { url: imageDataUrl } },
+  ] : text;
   const response = await fetch('https://api.openai.com/v1/moderations', {
     method: 'POST', headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'omni-moderation-latest', input: text }), cache: 'no-store',
+    body: JSON.stringify({ model: 'omni-moderation-latest', input }), cache: 'no-store',
   });
   if (!response.ok) throw new Error(`moderation_${response.status}`);
   const body = await response.json() as { results?: Array<{ flagged?: boolean }> };
@@ -50,11 +58,19 @@ export async function moderateText(text: string) {
 type HistoryItem = { role: 'user'|'assistant'; content: string };
 export async function createTutorResponse(args: {
   config: AssistantAIConfig; grade: number; userId: string; history: HistoryItem[]; message: string;
+  imageDataUrl?: string | null;
 }) {
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new Error('openai_not_configured');
-  const input = [...args.history, { role: 'user' as const, content: args.message }]
-    .map(item => ({ role: item.role, content: item.content }));
+  const input: Array<{ role: 'user'|'assistant'; content: string | Array<Record<string, string>> }> =
+    args.history.map(item => ({ role: item.role, content: item.content }));
+  const currentContent: Array<Record<string, string>> = [
+    { type: 'input_text', text: args.message },
+  ];
+  if (args.imageDataUrl) currentContent.push({
+    type: 'input_image', image_url: args.imageDataUrl, detail: 'auto',
+  });
+  input.push({ role: 'user', content: currentContent });
   const response = await fetch('https://api.openai.com/v1/responses', {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
